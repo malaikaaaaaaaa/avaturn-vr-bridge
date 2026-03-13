@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Create Your Avatar</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; width: 100vw; height: 100vh; overflow: hidden; }
+    iframe { width: 100%; height: 100%; border: none; display: block; }
+    #success {
+      display: none;
+      position: fixed; inset: 0;
+      background: #000;
+      color: #fff;
+      font-family: sans-serif;
+      font-size: 24px;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      flex-direction: column;
+      gap: 16px;
+    }
+    #success .tick { font-size: 64px; }
+  </style>
+</head>
+<body>
+
+  <iframe
+    id="avaturnFrame"
+    src="https://parallelverse.avaturn.dev"
+    allow="camera; microphone"
+  ></iframe>
+
+  <div id="success">
+    <div class="tick">✅</div>
+    <div>Avatar created! Put your headset back on.</div>
+  </div>
+
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC1vhDKaNBNRaToxL6dF-MTeHpnvZthHro",
+      authDomain: "avaturn-vr.firebaseapp.com",
+      databaseURL: "https://avaturn-vr-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "avaturn-vr",
+      storageBucket: "avaturn-vr.firebasestorage.app",
+      messagingSenderId: "477412928056",
+      appId: "1:477412928056:web:e0654f7d5ea50bc80f54cd"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Listen for Avaturn export message
+    window.addEventListener("message", async (event) => {
+      if (event.data?.source === "avaturn" && event.data?.eventName === "export") {
+        const avatarUrl = event.data?.data?.url;
+        if (avatarUrl) {
+          console.log("Avatar URL received:", avatarUrl);
+          // Save to Firebase
+          await set(ref(db, "avatar/url"), avatarUrl);
+          await set(ref(db, "avatar/timestamp"), Date.now());
+          // Show success screen
+          document.getElementById("avaturnFrame").style.display = "none";
+          const s = document.getElementById("success");
+          s.style.display = "flex";
+        }
+      }
+    });
+  </script>
+
+</body>
+</html>
