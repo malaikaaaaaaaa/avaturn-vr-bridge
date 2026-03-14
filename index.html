@@ -1,43 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Create Your Avatar</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #000; width: 100vw; height: 100vh; overflow: hidden; }
-    iframe { width: 100%; height: 100%; border: none; display: block; }
-    #success {
-      display: none;
-      position: fixed; inset: 0;
-      background: #000;
-      color: #fff;
-      font-family: sans-serif;
-      font-size: 24px;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      flex-direction: column;
-      gap: 16px;
+    body {
+      background: #111; color: #fff; font-family: sans-serif;
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 24px; gap: 24px; text-align: center;
     }
-    #success .tick { font-size: 64px; }
+    h1 { font-size: 24px; }
+    p { font-size: 14px; color: #aaa; line-height: 1.6; }
+    a.btn {
+      display: block; background: #aaff00; color: #000;
+      font-weight: bold; font-size: 18px; padding: 16px 32px;
+      border-radius: 12px; text-decoration: none; width: 100%; max-width: 400px;
+    }
+    .step {
+      background: #222; border-radius: 12px; padding: 16px;
+      width: 100%; max-width: 400px; text-align: left;
+    }
+    .step h2 { font-size: 16px; margin-bottom: 8px; color: #aaff00; }
+    input {
+      width: 100%; padding: 12px; border-radius: 8px;
+      border: 1px solid #444; background: #333; color: #fff;
+      font-size: 14px; margin-top: 8px;
+    }
+    button {
+      margin-top: 12px; width: 100%; padding: 14px;
+      background: #aaff00; color: #000; font-weight: bold;
+      font-size: 16px; border: none; border-radius: 8px; cursor: pointer;
+    }
+    #success { display: none; font-size: 20px; color: #aaff00; }
+    #error { display: none; font-size: 14px; color: #ff4444; margin-top: 8px; }
   </style>
 </head>
 <body>
+  <h1>🎮 Create Your VR Avatar</h1>
 
-  <iframe
-    id="avaturnFrame"
-    src="https://parallelverse.avaturn.dev"
-    allow="camera; microphone"
-  ></iframe>
-
-  <div id="success">
-    <div class="tick">✅</div>
-    <div>Avatar created! Put your headset back on.</div>
+  <div class="step">
+    <h2>Step 1 — Create your avatar</h2>
+    <p>Click below, take a selfie and customize. After clicking <strong>Next</strong>, copy the avatar URL from the browser address bar.</p>
+    <a class="btn" href="https://parallelverse.avaturn.dev" target="_blank">Open Avaturn →</a>
   </div>
 
-  <!-- Firebase -->
+  <div class="step">
+    <h2>Step 2 — Paste your avatar URL</h2>
+    <p>Come back here and paste the URL from Avaturn:</p>
+    <input type="text" id="avatarUrl" placeholder="Paste avatar URL here..."/>
+    <div id="error">Please enter a valid URL!</div>
+    <button onclick="saveAvatar()">Load Avatar in VR ✅</button>
+  </div>
+
+  <div id="success">✅ Avatar saved! Put your headset back on.</div>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
@@ -55,23 +74,18 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // Listen for Avaturn export message
-    window.addEventListener("message", async (event) => {
-      if (event.data?.source === "avaturn" && event.data?.eventName === "export") {
-        const avatarUrl = event.data?.data?.url;
-        if (avatarUrl) {
-          console.log("Avatar URL received:", avatarUrl);
-          // Save to Firebase
-          await set(ref(db, "avatar/url"), avatarUrl);
-          await set(ref(db, "avatar/timestamp"), Date.now());
-          // Show success screen
-          document.getElementById("avaturnFrame").style.display = "none";
-          const s = document.getElementById("success");
-          s.style.display = "flex";
-        }
+    window.saveAvatar = async function() {
+      const url = document.getElementById("avatarUrl").value.trim();
+      if (!url || !url.startsWith("http")) {
+        document.getElementById("error").style.display = "block";
+        return;
       }
-    });
+      document.getElementById("error").style.display = "none";
+      await set(ref(db, "avatar/url"), url);
+      await set(ref(db, "avatar/timestamp"), Date.now());
+      document.getElementById("success").style.display = "block";
+      document.querySelectorAll(".step").forEach(s => s.style.display = "none");
+    }
   </script>
-
 </body>
 </html>
