@@ -14,47 +14,37 @@
     }
     h1 { font-size: 24px; }
     p { font-size: 14px; color: #aaa; line-height: 1.6; }
-    a.btn {
+    #startBtn {
       display: block; background: #aaff00; color: #000;
       font-weight: bold; font-size: 18px; padding: 16px 32px;
-      border-radius: 12px; text-decoration: none; width: 100%; max-width: 400px;
+      border-radius: 12px; text-decoration: none;
+      width: 100%; max-width: 400px; border: none; cursor: pointer;
     }
-    .step {
-      background: #222; border-radius: 12px; padding: 16px;
-      width: 100%; max-width: 400px; text-align: left;
+    #iframeContainer {
+      display: none; width: 100%; max-width: 480px;
+      height: 80vh; border-radius: 12px; overflow: hidden;
     }
-    .step h2 { font-size: 16px; margin-bottom: 8px; color: #aaff00; }
-    input {
-      width: 100%; padding: 12px; border-radius: 8px;
-      border: 1px solid #444; background: #333; color: #fff;
-      font-size: 14px; margin-top: 8px;
-    }
-    button {
-      margin-top: 12px; width: 100%; padding: 14px;
-      background: #aaff00; color: #000; font-weight: bold;
-      font-size: 16px; border: none; border-radius: 8px; cursor: pointer;
+    #avaturnFrame {
+      width: 100%; height: 100%; border: none;
     }
     #success { display: none; font-size: 20px; color: #aaff00; }
-    #error { display: none; font-size: 14px; color: #ff4444; margin-top: 8px; }
+    #status { font-size: 13px; color: #aaa; }
   </style>
 </head>
 <body>
   <h1>🎮 Create Your VR Avatar</h1>
+  <p>Create your avatar below — it will save to your headset automatically!</p>
 
-  <div class="step">
-    <h2>Step 1 — Create your avatar</h2>
-    <p>Click below, take a selfie and customize. After clicking <strong>Next</strong>, copy the avatar URL from the browser address bar.</p>
-    <a class="btn" href="https://parallelverse.avaturn.dev" target="_blank">Open Avaturn →</a>
+  <button id="startBtn" onclick="openAvaturn()">Open Avaturn →</button>
+
+  <div id="iframeContainer">
+    <iframe id="avaturnFrame"
+      src="https://parallelverse.avaturn.dev"
+      allow="camera; microphone">
+    </iframe>
   </div>
 
-  <div class="step">
-    <h2>Step 2 — Paste your avatar URL</h2>
-    <p>Come back here and paste the URL from Avaturn:</p>
-    <input type="text" id="avatarUrl" placeholder="Paste avatar URL here..."/>
-    <div id="error">Please enter a valid URL!</div>
-    <button onclick="saveAvatar()">Load Avatar in VR ✅</button>
-  </div>
-
+  <div id="status">Waiting for avatar...</div>
   <div id="success">✅ Avatar saved! Put your headset back on.</div>
 
   <script type="module">
@@ -74,18 +64,34 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    window.saveAvatar = async function() {
-      const url = document.getElementById("avatarUrl").value.trim();
-      if (!url || !url.startsWith("http")) {
-        document.getElementById("error").style.display = "block";
-        return;
+    window.openAvaturn = function() {
+      document.getElementById("startBtn").style.display = "none";
+      document.getElementById("iframeContainer").style.display = "block";
+      document.getElementById("status").textContent = "Customize your avatar, then click Next...";
+    };
+
+    // Listen for Avaturn SDK export event
+    window.addEventListener("message", async (event) => {
+      console.log("Message received:", event.data);
+
+      // Avaturn sends this when user clicks Next/Export
+      if (
+        event.data &&
+        (event.data.eventName === "export" || event.data.type === "export") 
+      ) {
+        const avatarUrl = event.data.data?.url || event.data.url;
+        console.log("Avatar URL captured:", avatarUrl);
+
+        if (avatarUrl) {
+          document.getElementById("status").textContent = "Saving avatar to VR...";
+          await set(ref(db, "avatar/url"), avatarUrl);
+          await set(ref(db, "avatar/timestamp"), Date.now());
+          document.getElementById("iframeContainer").style.display = "none";
+          document.getElementById("success").style.display = "block";
+          document.getElementById("status").textContent = "✅ Done!";
+        }
       }
-      document.getElementById("error").style.display = "none";
-      await set(ref(db, "avatar/url"), url);
-      await set(ref(db, "avatar/timestamp"), Date.now());
-      document.getElementById("success").style.display = "block";
-      document.querySelectorAll(".step").forEach(s => s.style.display = "none");
-    }
+    });
   </script>
 </body>
 </html>
