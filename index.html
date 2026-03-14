@@ -24,9 +24,7 @@
       display: none; width: 100%; max-width: 480px;
       height: 80vh; border-radius: 12px; overflow: hidden;
     }
-    #avaturnFrame {
-      width: 100%; height: 100%; border: none;
-    }
+    #avaturnFrame { width: 100%; height: 100%; border: none; }
     #success { display: none; font-size: 20px; color: #aaff00; }
     #status { font-size: 13px; color: #aaa; word-break: break-all; max-width: 480px; }
   </style>
@@ -47,6 +45,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyC1vhDKaNBNRaToxL6dF-MTeHpnvZthHro",
@@ -60,6 +59,7 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
+    const storage = getStorage(app);
 
     window.openAvaturn = function() {
       document.getElementById("startBtn").style.display = "none";
@@ -68,38 +68,37 @@
     };
 
     window.addEventListener("message", async (event) => {
-      // Show ALL messages on screen for debugging
-      document.getElementById("status").textContent = "MSG: " + JSON.stringify(event.data).substring(0, 200);
-
       const data = event.data;
       if (!data) return;
 
-      // Try all possible Avaturn event formats
-      const isExport =
-        data.eventName === "export" ||
-        data.type === "export" ||
-        data.source === "avaturn" ||
-        (typeof data === "string" && data.includes("export")) ||
-        data.event === "export" ||
-        data.name === "export";
+      // Avaturn v2 event
+      if (data.eventName === "v2.avatar.exported" && data.data?.url) {
+        const dataUrl = data.data.url;
 
-      if (isExport) {
-        const avatarUrl =
-          data.data?.url ||
-          data.url ||
-          data.avatarUrl ||
-          data.glb ||
-          (typeof data === "string" ? data : null);
+        document.getElementById("status").textContent = "⏳ Uploading avatar to cloud...";
+        document.getElementById("iframeContainer").style.display = "none";
 
-        document.getElementById("status").textContent = "URL found: " + avatarUrl;
+        try {
+          // Convert base64 data URL to blob
+          const res = await fetch(dataUrl);
+          const blob = await res.blob();
 
-        if (avatarUrl && avatarUrl.startsWith("http")) {
-          document.getElementById("status").textContent = "Saving to Firebase...";
-          await set(ref(db, "avatar/url"), avatarUrl);
+          // Upload to Firebase Storage
+          const avatarRef = storageRef(storage, "avatars/avatar.glb");
+          await uploadBytes(avatarRef, blob, { contentType: "model/gltf-binary" });
+
+          // Get download URL
+          const downloadURL = await getDownloadURL(avatarRef);
+
+          // Save download URL to Realtime Database
+          await set(ref(db, "avatar/url"), downloadURL);
           await set(ref(db, "avatar/timestamp"), Date.now());
-          document.getElementById("iframeContainer").style.display = "none";
+
           document.getElementById("success").style.display = "block";
-          document.getElementById("status").textContent = "✅ Done!";
+          document.getElementById("status").textContent = "✅ Done! URL: " + downloadURL.substring(0, 60) + "...";
+
+        } catch (err) {
+          document.getElementById("status").textContent = "❌ Error: " + err.message;
         }
       }
     });
