@@ -28,24 +28,21 @@
       width: 100%; height: 100%; border: none;
     }
     #success { display: none; font-size: 20px; color: #aaff00; }
-    #status { font-size: 13px; color: #aaa; }
+    #status { font-size: 13px; color: #aaa; word-break: break-all; max-width: 480px; }
   </style>
 </head>
 <body>
-  <h1> Create Your VR Avatar</h1>
+  <h1>🎮 Create Your VR Avatar</h1>
   <p>Create your avatar below — it will save to your headset automatically!</p>
-
   <button id="startBtn" onclick="openAvaturn()">Open Avaturn →</button>
-
   <div id="iframeContainer">
     <iframe id="avaturnFrame"
       src="https://parallelverse.avaturn.dev"
       allow="camera; microphone">
     </iframe>
   </div>
-
   <div id="status">Waiting for avatar...</div>
-  <div id="success"> Avatar saved! Put your headset back on.</div>
+  <div id="success">✅ Avatar saved! Put your headset back on.</div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -70,25 +67,39 @@
       document.getElementById("status").textContent = "Customize your avatar, then click Next...";
     };
 
-    // Listen for Avaturn SDK export event
     window.addEventListener("message", async (event) => {
-      console.log("Message received:", event.data);
+      // Show ALL messages on screen for debugging
+      document.getElementById("status").textContent = "MSG: " + JSON.stringify(event.data).substring(0, 200);
 
-      // Avaturn sends this when user clicks Next/Export
-      if (
-        event.data &&
-        (event.data.eventName === "export" || event.data.type === "export") 
-      ) {
-        const avatarUrl = event.data.data?.url || event.data.url;
-        console.log("Avatar URL captured:", avatarUrl);
+      const data = event.data;
+      if (!data) return;
 
-        if (avatarUrl) {
-          document.getElementById("status").textContent = "Saving avatar to VR...";
+      // Try all possible Avaturn event formats
+      const isExport =
+        data.eventName === "export" ||
+        data.type === "export" ||
+        data.source === "avaturn" ||
+        (typeof data === "string" && data.includes("export")) ||
+        data.event === "export" ||
+        data.name === "export";
+
+      if (isExport) {
+        const avatarUrl =
+          data.data?.url ||
+          data.url ||
+          data.avatarUrl ||
+          data.glb ||
+          (typeof data === "string" ? data : null);
+
+        document.getElementById("status").textContent = "URL found: " + avatarUrl;
+
+        if (avatarUrl && avatarUrl.startsWith("http")) {
+          document.getElementById("status").textContent = "Saving to Firebase...";
           await set(ref(db, "avatar/url"), avatarUrl);
           await set(ref(db, "avatar/timestamp"), Date.now());
           document.getElementById("iframeContainer").style.display = "none";
           document.getElementById("success").style.display = "block";
-          document.getElementById("status").textContent = " Done!";
+          document.getElementById("status").textContent = "✅ Done!";
         }
       }
     });
