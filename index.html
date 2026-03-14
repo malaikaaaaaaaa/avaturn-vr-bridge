@@ -15,37 +15,44 @@
     h1 { font-size: 24px; }
     p { font-size: 14px; color: #aaa; line-height: 1.6; }
     #startBtn {
-      display: block; background: #aaff00; color: #000;
+      display: block; background: #FFD700; color: #000;
       font-weight: bold; font-size: 18px; padding: 16px 32px;
-      border-radius: 12px; text-decoration: none;
-      width: 100%; max-width: 400px; border: none; cursor: pointer;
+      border-radius: 12px; width: 100%; max-width: 400px;
+      border: none; cursor: pointer;
     }
-    #iframeContainer {
+    #startBtn:hover { background: #FFC200; }
+    #avaturn-sdk-container {
       display: none; width: 100%; max-width: 480px;
       height: 80vh; border-radius: 12px; overflow: hidden;
     }
-    #avaturnFrame { width: 100%; height: 100%; border: none; }
-    #success { display: none; font-size: 20px; color: #aaff00; }
+    #avaturn-sdk-container iframe {
+      width: 100%; height: 100%; border: none;
+    }
+    #success { display: none; font-size: 20px; color: #FFD700; }
     #status { font-size: 13px; color: #aaa; word-break: break-all; max-width: 480px; }
+    #progressBar {
+      display: none; width: 100%; max-width: 400px;
+      height: 8px; background: #333; border-radius: 4px; overflow: hidden;
+    }
+    #progressFill {
+      height: 100%; background: #FFD700; width: 0%;
+      transition: width 0.2s ease;
+    }
   </style>
 </head>
 <body>
   <h1>🎮 Create Your VR Avatar</h1>
   <p>Create your avatar below — it will save to your headset automatically!</p>
   <button id="startBtn" onclick="openAvaturn()">Open Avaturn →</button>
-  <div id="iframeContainer">
-    <iframe id="avaturnFrame"
-      src="https://parallelverse.avaturn.dev"
-      allow="camera; microphone">
-    </iframe>
-  </div>
+  <div id="avaturn-sdk-container"></div>
+  <div id="progressBar"><div id="progressFill"></div></div>
   <div id="status">Waiting for avatar...</div>
   <div id="success">✅ Avatar saved! Put your headset back on.</div>
 
   <script type="module">
+    import { AvaturnSDK } from "https://cdn.jsdelivr.net/npm/@avaturn/sdk/dist/index.js";
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyC1vhDKaNBNRaToxL6dF-MTeHpnvZthHro",
@@ -59,49 +66,64 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    const storage = getStorage(app);
 
-    window.openAvaturn = function() {
+    function setProgress(percent) {
+      document.getElementById("progressBar").style.display = "block";
+      document.getElementById("progressFill").style.width = percent + "%";
+    }
+
+    window.openAvaturn = async function() {
       document.getElementById("startBtn").style.display = "none";
-      document.getElementById("iframeContainer").style.display = "block";
+      document.getElementById("avaturn-sdk-container").style.display = "block";
+      document.getElementById("status").textContent = "Loading Avaturn...";
+
+      const container = document.getElementById("avaturn-sdk-container");
+      const sdk = new AvaturnSDK();
+
+      await sdk.init(container, {
+        url: "https://parallelverse.avaturn.dev"
+      });
+
       document.getElementById("status").textContent = "Customize your avatar, then click Next...";
-    };
 
-    window.addEventListener("message", async (event) => {
-      const data = event.data;
-      if (!data) return;
+      // This fires when user clicks Next!
+      sdk.on("export", async (data) => {
+        console.log("Export event received!", data);
+        const dataUrl = data.url;
 
-      // Avaturn v2 event
-      if (data.eventName === "v2.avatar.exported" && data.data?.url) {
-        const dataUrl = data.data.url;
-
-        document.getElementById("status").textContent = "⏳ Uploading avatar to cloud...";
-        document.getElementById("iframeContainer").style.display = "none";
+        document.getElementById("avaturn-sdk-container").style.display = "none";
+        document.getElementById("status").textContent = "⏳ Saving avatar... please wait";
+        setProgress(5);
 
         try {
-          // Convert base64 data URL to blob
-          const res = await fetch(dataUrl);
-          const blob = await res.blob();
+          const chunkSize = 800000;
+          const chunks = Math.ceil(dataUrl.length / chunkSize);
 
-          // Upload to Firebase Storage
-          const avatarRef = storageRef(storage, "avatars/avatar.glb");
-          await uploadBytes(avatarRef, blob, { contentType: "model/gltf-binary" });
+          await set(ref(db, "avatar"), null);
+          setProgress(10);
 
-          // Get download URL
-          const downloadURL = await getDownloadURL(avatarRef);
-
-          // Save download URL to Realtime Database
-          await set(ref(db, "avatar/url"), downloadURL);
+          await set(ref(db, "avatar/totalChunks"), chunks);
           await set(ref(db, "avatar/timestamp"), Date.now());
 
+          for (let i = 0; i < chunks; i++) {
+            const chunk = dataUrl.substring(i * chunkSize, (i + 1) * chunkSize);
+            await set(ref(db, `avatar/chunk_${i}`), chunk);
+            const progress = 10 + Math.round(((i + 1) / chunks) * 85);
+            setProgress(progress);
+            document.getElementById("status").textContent =
+              `⏳ Saving... ${i + 1}/${chunks} chunks`;
+          }
+
+          setProgress(100);
           document.getElementById("success").style.display = "block";
-          document.getElementById("status").textContent = "✅ Done! URL: " + downloadURL.substring(0, 60) + "...";
+          document.getElementById("status").textContent =
+            "✅ Done! " + chunks + " chunks saved. Put on your headset!";
 
         } catch (err) {
           document.getElementById("status").textContent = "❌ Error: " + err.message;
         }
-      }
-    });
+      });
+    };
   </script>
 </body>
 </html>
