@@ -99,20 +99,6 @@
       return result.secure_url;
     }
 
-    // ✅ NEW: Helper to auto-set animation after SDK is ready
-    async function setDefaultAnimation(sdk) {
-      try {
-        const animations = await sdk.getAnimationList();
-        console.log("Available animations:", animations);
-        if (animations && animations.length > 0) {
-          await sdk.setActiveAnimation(animations[0].id);
-          console.log("✅ Animation set:", animations[0].id);
-        }
-      } catch (e) {
-        console.warn("⚠️ Could not set animation (may not be supported on this subdomain):", e);
-      }
-    }
-
     window.openAvaturn = async function() {
       document.getElementById("startBtn").style.display = "none";
       document.getElementById("avaturn-sdk-container").style.display = "block";
@@ -124,15 +110,6 @@
       await sdk.init(container, {
         url: "https://parallelverse.avaturn.dev"
       });
-
-      // ✅ NEW: Try to set animation via "load" event (works with Avaturn API sessions)
-      sdk.on("load", async () => {
-        console.log("Avaturn loaded, setting animation...");
-        await setDefaultAnimation(sdk);
-      });
-
-      // ✅ NEW: Also try directly after init (fallback for custom subdomains)
-      await setDefaultAnimation(sdk);
 
       document.getElementById("status").textContent = "Customize your avatar, then click Next...";
 
